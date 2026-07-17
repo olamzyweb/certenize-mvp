@@ -2,16 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Credential;
 use App\Models\QuizSession;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Web3\Web3;
-use Web3\Contract;
+use kornrunner\Keccak;
 use Web3\Providers\HttpProvider;
 use Web3\RequestManagers\HttpRequestManager;
+use Web3\Web3;
 use Web3p\EthereumTx\Transaction;
-use kornrunner\Keccak;
 
 class CredentialController extends Controller
 {
@@ -19,7 +18,8 @@ class CredentialController extends Controller
     {
         $req->validate([
             'mint_token' => 'required|string',
-            'reciepient_name' => 'nullable|string'
+            'recipient_name' => 'nullable|string',
+            'reciepient_name' => 'nullable|string',
         ]);
 
         try {
@@ -29,7 +29,7 @@ class CredentialController extends Controller
 
             $rpcUrl = env('RPC_URL');
             $privateKey = env('PRIVATE_KEY');
-            $contractAddress = env('CONTRACT_ADDRESS');
+            $contractAddress = env('CONTRACT_ADDRESS', '0xe6b3794191523de54a03a685fdd786b313b1788c');
             $fromAddress = env('FROM_ADDRESS');
 
             if (!$rpcUrl || !$privateKey) {
@@ -42,82 +42,93 @@ class CredentialController extends Controller
                 return response()->json(['success' => false, 'error' => 'Invalid wallet address'], 400);
             }
 
-            // Setup Web3
-            $requestManager = new HttpRequestManager($rpcUrl, 30);
+            $requestManager = new HttpRequestManager($rpcUrl, (int) env('RPC_TIMEOUT', 30));
             $provider = new HttpProvider($requestManager);
             $web3 = new Web3($provider);
 
-            // Build metadata
             $metadata = [
                 'name' => $session->topic,
                 'description' => 'Certenize verified skill',
                 'attributes' => [
-                    ['trait_type' => 'Score', 'value' => (string)$session->score]
-                ]
+                    ['trait_type' => 'Score', 'value' => (string) $session->score],
+                ],
             ];
-            $metadataJson = json_encode($metadata);
+            $metadataJson = json_encode($metadata, JSON_UNESCAPED_SLASHES);
             $metadataHex = bin2hex($metadataJson);
 
-            // Encode function call
             $selector = substr(Keccak::hash('mintTo(address,string)', 256), 0, 8);
             $addressPadded = str_pad(ltrim($session->wallet_address, '0x'), 64, '0', STR_PAD_LEFT);
             $offset = str_pad(dechex(0x40), 64, '0', STR_PAD_LEFT);
-            $metadataLenHex = str_pad(dechex(strlen(hex2bin($metadataHex))), 64, '0', STR_PAD_LEFT);
+            $metadataByteLength = strlen(hex2bin($metadataHex));
+            $metadataLenHex = str_pad(dechex($metadataByteLength), 64, '0', STR_PAD_LEFT);
 
             $mod = strlen($metadataHex) % 64;
             if ($mod !== 0) {
                 $metadataHex .= str_repeat('0', 64 - $mod);
             }
 
-            $data = "0x{$selector}{$addressPadded}{$offset}{$metadataLenHex}{$metadataHex}";
+            $data = '0x' . $selector . $addressPadded . $offset . $metadataLenHex . $metadataHex;
 
-            // Get nonce
             $nonce = null;
             $web3->eth->getTransactionCount($fromAddress, 'pending', function ($err, $count) use (&$nonce) {
-                if ($err === null) $nonce = $count;
+                if ($err !== null) {
+                    throw new \Exception('getTransactionCount error: ' . $err->getMessage());
+                }
+                $nonce = $count;
             });
 
-            $wait = 0;
-            while ($nonce === null && $wait < 10) {
-                usleep(100000);
-                $wait++;
+            $waitTime = 0;
+            while ($nonce === null && $waitTime < 10) {
+                usleep(100_000);
+                $waitTime++;
             }
 
             if ($nonce === null) {
-                return response()->json(['success' => false, 'error' => 'Failed to get nonce from RPC'], 500);
+                return response()->json(['success' => false, 'error' => 'Failed to fetch nonce.'], 500);
             }
 
             if ($nonce instanceof \phpseclib\Math\BigInteger) {
-                $nonce = (int)$nonce->toString();
+                $nonceInt = (int) $nonce->toString();
+            } elseif (is_string($nonce)) {
+                $nonceInt = hexdec(ltrim($nonce, '0x'));
+            } else {
+                $nonceInt = (int) $nonce;
             }
 
+            $gasPrice = 50 * 1_000_000_000;
+            $gasLimit = 400000;
+
             $txArray = [
-                'nonce' => '0x' . dechex($nonce),
+                'nonce' => '0x' . dechex($nonceInt),
                 'to' => $contractAddress,
                 'value' => '0x0',
                 'data' => $data,
-                'gas' => '0x' . dechex(400000),
-                'gasPrice' => '0x' . dechex(50 * 1_000_000_000),
-                'chainId' => $this->getChainId($rpcUrl)
+                'gas' => '0x' . dechex($gasLimit),
+                'gasPrice' => '0x' . dechex($gasPrice),
+                'chainId' => $this->getChainId($rpcUrl),
             ];
 
             $tx = new Transaction($txArray);
             $signed = $tx->sign($privateKey);
-            $signedHex = '0x' . ltrim($signed, '0x');
+            $signedHex = (strpos($signed, '0x') === 0) ? $signed : '0x' . $signed;
 
             $txHash = null;
             $error = null;
 
             $web3->eth->sendRawTransaction($signedHex, function ($err, $tx) use (&$txHash, &$error) {
-                if ($err) $error = $err->getMessage();
-                else $txHash = $tx;
+                if ($err) {
+                    $error = $err->getMessage();
+                } else {
+                    $txHash = $tx;
+                }
             });
 
             if ($error) {
                 return response()->json(['success' => false, 'error' => $error], 500);
             }
 
-            // Save certificate
+            $recipientName = $req->input('recipient_name', $req->input('reciepient_name'));
+
             $cred = Credential::create([
                 'wallet_address' => $session->wallet_address,
                 'quiz_session_id' => $session->id,
@@ -125,29 +136,29 @@ class CredentialController extends Controller
                 'transaction_hash' => $txHash,
                 'skill' => $session->topic,
                 'score' => $session->score,
-                'minted_at' => now()
+                'minted_at' => now(),
             ]);
 
-            // Return a Certificate object (matching your TS interface)
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'id' => (string)$cred->id,
+                    'id' => (string) $cred->id,
                     'tokenId' => $cred->token_id,
-                    'title' => $session->topic . " Certificate",
-                    'description' => "Certenize verified skill: " . $session->topic,
+                    'title' => $session->topic . ' Certificate',
+                    'description' => 'Certenize verified skill: ' . $session->topic,
                     'recipientAddress' => $cred->wallet_address,
-                    'recipientName' => $req->reciepient_name,
+                    'recipientName' => $recipientName,
                     'issueDate' => now()->toIso8601String(),
                     'topic' => $cred->skill,
                     'score' => $cred->score,
                     'imageUrl' => env('CERT_IMAGE_BASE', url('/placeholder.svg')),
                     'metadataUri' => null,
                     'transactionHash' => $txHash,
-                    'minted' => true
-                ]
+                    'minted' => true,
+                ],
             ]);
         } catch (\Throwable $e) {
+            Log::error('SBT Minting Exception', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
@@ -159,12 +170,19 @@ class CredentialController extends Controller
     {
         $chainId = env('CHAIN_ID');
         if (!empty($chainId)) {
-            return (int)$chainId;
+            return (int) $chainId;
         }
 
-        if (strpos($rpcUrl, 'sepolia') !== false) return 11155111;
-        if (strpos($rpcUrl, 'goerli') !== false) return 5;
-        if (strpos($rpcUrl, 'mainnet') !== false) return 1;
+        if (strpos($rpcUrl, 'sepolia') !== false) {
+            return 11155111;
+        }
+        if (strpos($rpcUrl, 'goerli') !== false) {
+            return 5;
+        }
+        if (strpos($rpcUrl, 'mainnet') !== false) {
+            return 1;
+        }
+
         return 11155111;
     }
 
@@ -174,7 +192,7 @@ class CredentialController extends Controller
 
         $data = $creds->map(function ($c) {
             return [
-                'id' => (string)$c->id,
+                'id' => (string) $c->id,
                 'tokenId' => $c->token_id,
                 'title' => $c->skill . ' Certificate',
                 'description' => 'Certenize verified skill: ' . $c->skill,
@@ -186,7 +204,7 @@ class CredentialController extends Controller
                 'imageUrl' => env('CERT_IMAGE_BASE', url('/placeholder.svg')),
                 'metadataUri' => null,
                 'transactionHash' => $c->transaction_hash,
-                'minted' => (bool)$c->minted_at
+                'minted' => (bool) $c->minted_at,
             ];
         });
 

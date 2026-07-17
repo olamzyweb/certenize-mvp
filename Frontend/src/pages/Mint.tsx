@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useQuizStore } from '@/hooks/useQuizStore';
+import { useAssessmentStore } from '@/hooks/useAssessmentStore';
 import { useConfetti } from '@/hooks/useConfetti';
 import { mintCredential } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -19,7 +19,7 @@ const Mint = () => {
   const VITE_APP_NAME = import.meta.env.VITE_APP_NAME || 'Certenize';
   const navigate = useNavigate();
   const { address } = useAccount();
-  const { lastResult, currentQuiz, resetQuiz } = useQuizStore();
+  const { lastResult, currentAssessment, resetAssessment } = useAssessmentStore();
   const { fireConfetti, fireStars } = useConfetti();
   
   const [recipientName, setRecipientName] = useState('');
@@ -28,7 +28,7 @@ const Mint = () => {
   const [txHash, setTxHash] = useState<string | null>(null);
 
   const handleMint = async () => {
-    if (!address || !lastResult || !currentQuiz) {
+    if (!address || !lastResult || !currentAssessment) {
       toast({
         title: 'Error',
         description: 'Missing required data for minting',
@@ -41,9 +41,10 @@ const Mint = () => {
     try {
       const response = await mintCredential({
         walletAddress: address,
+        mintToken: lastResult.mintToken,
         certificateData: {
-          title: `${currentQuiz.topic} Certificate`,
-          topic: currentQuiz.topic,
+          title: `${currentAssessment.topic} Certificate`,
+          topic: currentAssessment.topic,
           score: lastResult.percentage,
           recipientName: recipientName || undefined,
         },
@@ -78,11 +79,11 @@ const Mint = () => {
   };
 
   const handleViewGallery = () => {
-    resetQuiz();
+    resetAssessment();
     navigate('/gallery');
   };
 
-  if (!lastResult || !currentQuiz) {
+  if (!lastResult || !currentAssessment) {
     return (
       <>
         {/* Helmet for SEO */}
@@ -153,7 +154,7 @@ const Mint = () => {
                       </div>
                       
                       <h2 className="text-2xl font-bold font-display text-gradient mb-4">
-                        {currentQuiz.topic}
+                        {currentAssessment.topic}
                       </h2>
                       
                       {recipientName && (
@@ -201,7 +202,7 @@ const Mint = () => {
                           <div className="space-y-3">
                             <div className="flex justify-between py-2 border-b border-border">
                               <span className="text-muted-foreground">Topic</span>
-                              <span className="font-medium">{currentQuiz.topic}</span>
+                              <span className="font-medium">{currentAssessment.topic}</span>
                             </div>
                             <div className="flex justify-between py-2 border-b border-border">
                               <span className="text-muted-foreground">Score</span>

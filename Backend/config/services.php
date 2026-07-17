@@ -35,4 +35,29 @@ return [
         ],
     ],
 
+    'llm' => [
+        'provider' => env('LLM_PROVIDER', 'groq'),
+        'model' => env('LLM_MODEL', 'llama-3.3-70b-versatile'),
+        'groq' => [
+            'key' => env('GROQ_API_KEY'),
+            'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+        ],
+        'gemini' => [
+            'key' => env('GEMINI_API_KEY'),
+            'model' => env('GEMINI_MODEL', 'gemini-1.5-pro'),
+        ],
+        'openai' => [
+            'key' => env('OPENAI_API_KEY'),
+            'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        ],
+        'anthropic' => [
+            'key' => env('ANTHROPIC_API_KEY'),
+            'model' => env('ANTHROPIC_MODEL', 'claude-3-5-sonnet-latest'),
+        ],
+        'deepseek' => [
+            'key' => env('DEEPSEEK_API_KEY'),
+            'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+        ],
+    ],
+
 ];

@@ -14,11 +14,26 @@ class QuizSession extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id', 'wallet_address', 'topic', 'quiz_json', 'status', 'score', 'mint_token'
+        'id', 
+        'assessment_id',
+        'wallet_address', 
+        'topic', 
+        'quiz_json', 
+        'answers',
+        'ai_scores',
+        'status', 
+        'score', 
+        'tab_switches',
+        'copy_paste_events',
+        'window_blur_events',
+        'suspicious_flag',
+        'mint_token'
     ];
 
     protected $casts = [
-        'quiz_json' => 'array'
+        'quiz_json' => 'array',
+        'answers' => 'array',
+        'ai_scores' => 'array',
     ];
 
 
@@ -26,6 +41,11 @@ class QuizSession extends Model
     {
         parent::boot();
         static::creating(fn($model) => $model->id = (string) Str::uuid());
+    }
+
+    public function assessment()
+    {
+        return $this->belongsTo(Assessment::class);
     }
 
     public function credentials()

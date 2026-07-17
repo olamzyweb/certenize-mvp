@@ -9,7 +9,7 @@ import { useAccount } from 'wagmi';
 import { Helmet } from 'react-helmet-async';
 
 const Home = () => {
-  const VITE_APP_NAME = import.meta.env.VITE_APP_NAME || 'Soulbound Academy';
+  const VITE_APP_NAME = import.meta.env.VITE_APP_NAME || 'Certenize';
   const { isConnected } = useAccount();
 
   return (
@@ -41,15 +41,17 @@ const Home = () => {
                 className="glass-card p-8 sm:p-12 rounded-3xl text-center max-w-3xl mx-auto"
               >
                 <h2 className="text-3xl sm:text-4xl font-bold font-display mb-4">
-                  Ready to Prove Your Knowledge?
+                  Ready to Prove What You Know?
                 </h2>
                 <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-                  Start your first quiz today and earn blockchain-verified credentials that last forever.
+                  Paste any YouTube course link — our AI reads the transcript, builds a
+                  personalised open-ended assessment, and mints a blockchain-verified
+                  Soulbound credential when you pass. No institution required.
                 </p>
                 {isConnected && (
                   <Link to="/quiz">
                     <Button variant="hero" size="xl" className="group">
-                      Take Your First Quiz
+                      Start Your Assessment
                       <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
                     </Button>
                   </Link>

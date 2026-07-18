@@ -1,0 +1,9 @@
+# Ignore everything in the root directory
+/*
+
+# Except the Backend and Frontend directories
+!/Backend/
+!/Frontend/
+
+# Allow the root .gitignore itself
+!.gitignore

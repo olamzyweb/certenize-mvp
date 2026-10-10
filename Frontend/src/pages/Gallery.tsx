@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { useSearchParams } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { CertificateCard } from '@/components/certificates/CertificateCard';
+import { CredentialInspectionModal } from '@/components/certificates/CredentialInspectionModal';
 import { getCredentials } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ const Gallery = () => {
 
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
 
   // Sync with wallet or URL changes
   useEffect(() => {
@@ -211,7 +213,10 @@ const Gallery = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.08 }}
                   >
-                    <CertificateCard certificate={certificate} />
+                    <CertificateCard
+                      certificate={certificate}
+                      onClick={() => setSelectedCert(certificate)}
+                    />
                   </motion.div>
                 ))}
               </motion.div>
@@ -249,6 +254,13 @@ const Gallery = () => {
             )}
           </div>
         </main>
+
+        {/* ─── Recruiter Credential Inspection Modal ─────────────────── */}
+        <CredentialInspectionModal
+          certificate={selectedCert}
+          isOpen={Boolean(selectedCert)}
+          onClose={() => setSelectedCert(null)}
+        />
       </div>
     </>
   );

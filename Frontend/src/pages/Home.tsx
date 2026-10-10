@@ -114,8 +114,7 @@ const Home = () => {
                 </div>
 
                 <div className="text-xs text-muted-foreground text-center md:text-right font-mono">
-                  <p>Built for SMARP 2026 &bull; Ethereum Sepolia</p>
-                  <p className="text-[10px] mt-0.5">&copy; {new Date().getFullYear()} {VITE_APP_NAME}. All rights reserved.</p>
+                  <p className="text-[11px]">&copy; {new Date().getFullYear()} {VITE_APP_NAME}. All rights reserved.</p>
                 </div>
               </div>
             </div>

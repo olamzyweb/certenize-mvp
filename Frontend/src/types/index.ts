@@ -54,6 +54,26 @@ export interface Certificate {
   metadataUri?: string;
   transactionHash?: string;
   minted: boolean;
+  questions?: Array<{
+    id?: string;
+    question?: string;
+    question_text?: string;
+    type?: string;
+    expectedLength?: string;
+  }>;
+  answers?: string[];
+  aiScores?: Array<{
+    question_id?: string;
+    score: number;
+    feedback: string;
+  }>;
+  proctoring?: {
+    tabSwitches?: number;
+    copyPasteEvents?: number;
+    suspicious?: boolean;
+    appealStatus?: string;
+    videoUrl?: string;
+  };
 }
 
 // ─── API generic wrapper ───────────────────────────────────────────────────────

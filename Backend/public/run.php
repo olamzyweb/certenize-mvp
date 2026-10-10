@@ -59,18 +59,52 @@ $commands = [
     'migrate-fresh'  => ['command' => 'migrate:fresh',     'args' => ['--force' => true], 'label' => '⚠️ FRESH: Wipe & Re-run Migrations'],
 ];
 
-$cmd = $_GET['cmd'] ?? '';
+$cmd = $_GET['cmd'] ?? ($_POST['cmd'] ?? '');
+$customCmd = trim($_POST['custom_cmd'] ?? '');
 $output = '';
 $exitCode = null;
 $ran = false;
 
-if ($cmd && isset($commands[$cmd])) {
+// Handle custom artisan command input
+if (!empty($customCmd)) {
+    try {
+        ob_start();
+        $parts = explode(' ', $customCmd);
+        $commandName = array_shift($parts);
+        $args = [];
+        foreach ($parts as $part) {
+            if (str_starts_with($part, '--')) {
+                $eq = strpos($part, '=');
+                if ($eq !== false) {
+                    $k = substr($part, 0, $eq);
+                    $v = substr($part, $eq + 1);
+                    $args[$k] = $v;
+                } else {
+                    $args[$part] = true;
+                }
+            } else {
+                $args[] = $part;
+            }
+        }
+        $exitCode = $kernel->call($commandName, $args);
+        $output = $kernel->output();
+        ob_end_clean();
+        $ran = true;
+        $cmdNameDisplay = "php artisan " . $customCmd;
+    } catch (\Throwable $e) {
+        $ran = true;
+        $exitCode = 999;
+        $output = "Exception running custom command:\n\n" . $e->getMessage() . "\n\n" . $e->getTraceAsString();
+        $cmdNameDisplay = "php artisan " . $customCmd;
+    }
+} elseif ($cmd && isset($commands[$cmd])) {
     try {
         ob_start();
         $exitCode = $kernel->call($commands[$cmd]['command'], $commands[$cmd]['args']);
         $output = $kernel->output();
         ob_end_clean();
         $ran = true;
+        $cmdNameDisplay = "php artisan " . $commands[$cmd]['command'];
     } catch (\Throwable $e) {
         $ran = true;
         $exitCode = 999;
@@ -78,6 +112,7 @@ if ($cmd && isset($commands[$cmd])) {
                   "Message: " . $e->getMessage() . "\n" .
                   "File: " . $e->getFile() . " (Line " . $e->getLine() . ")\n\n" .
                   "Stack Trace:\n" . $e->getTraceAsString();
+        $cmdNameDisplay = "php artisan " . $commands[$cmd]['command'];
     }
 }
 
@@ -195,17 +230,27 @@ if ($cmd && isset($commands[$cmd])) {
         <?php endforeach; ?>
     </div>
 
+    <!-- Custom Command Input Form -->
+    <form method="POST" action="?token=<?= htmlspecialchars(RUNNER_TOKEN) ?>" style="margin-bottom: 24px; display: flex; gap: 8px;">
+        <input type="text" name="custom_cmd" placeholder="Type custom artisan command (e.g. migrate --force, route:list, db:seed)..." 
+               value="<?= htmlspecialchars($customCmd) ?>"
+               style="flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-family: monospace; font-size: 0.9rem; outline: none;">
+        <button type="submit" style="padding: 12px 20px; border-radius: 8px; border: none; background: #7c3aed; color: #fff; font-weight: 600; cursor: pointer; font-size: 0.9rem; white-space: nowrap;">
+            Run Artisan Command
+        </button>
+    </form>
+
     <div class="output-box">
         <?php if ($ran): ?>
             <h2>
-                Command Output: <code style="color:#f1f5f9;font-size:0.9rem">php artisan <?= htmlspecialchars($commands[$cmd]['command']) ?></code>
+                Command Output: <code style="color:#f1f5f9;font-size:0.9rem"><?= htmlspecialchars($cmdNameDisplay ?? '') ?></code>
                 <span class="badge <?= $exitCode === 0 ? 'badge-ok' : 'badge-err' ?>">
                     <?= $exitCode === 0 ? 'Success' : ($exitCode === 999 ? 'Exception Thrown' : "Exit Code $exitCode") ?>
                 </span>
             </h2>
             <pre><?= htmlspecialchars(trim($output) ?: '(No output returned)') ?></pre>
         <?php else: ?>
-            <p class="empty">Click any command above to run it on the server. Output will appear here.</p>
+            <p class="empty">Click any command above or type a custom command to run it on the server. Output will appear here.</p>
         <?php endif; ?>
     </div>
 

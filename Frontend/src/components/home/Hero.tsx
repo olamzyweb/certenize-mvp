@@ -172,9 +172,9 @@ export function Hero() {
                   color: 'text-cyan-400',
                 },
                 {
-                  label: 'Cost per Test',
-                  val: '~₦15 ($0.01)',
-                  icon: Cpu,
+                  label: 'Anti-Cheat Telemetry',
+                  val: 'AI Video Proof',
+                  icon: ShieldCheck,
                   color: 'text-amber-400',
                 },
               ].map((item, idx) => (

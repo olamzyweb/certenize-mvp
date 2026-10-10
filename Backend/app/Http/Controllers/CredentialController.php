@@ -189,11 +189,26 @@ class CredentialController extends Controller
     public function walletCredentials($wallet)
     {
         $wallet = trim($wallet);
-        $creds = Credential::whereRaw('LOWER(wallet_address) = ?', [strtolower($wallet)])
+        $creds = Credential::with('session')
+            ->whereRaw('LOWER(wallet_address) = ?', [strtolower($wallet)])
             ->orderBy('id', 'desc')
             ->get();
 
         $data = $creds->map(function ($c) {
+            $sess = $c->session;
+
+            // Defensive date resolution to prevent 1970 fallback
+            $issueDate = null;
+            if ($c->minted_at) {
+                $issueDate = \Carbon\Carbon::parse($c->minted_at)->toIso8601String();
+            } elseif ($c->created_at) {
+                $issueDate = \Carbon\Carbon::parse($c->created_at)->toIso8601String();
+            } elseif ($sess && $sess->created_at) {
+                $issueDate = \Carbon\Carbon::parse($sess->created_at)->toIso8601String();
+            } else {
+                $issueDate = now()->toIso8601String();
+            }
+
             return [
                 'id' => (string) $c->id,
                 'tokenId' => $c->token_id,
@@ -201,13 +216,23 @@ class CredentialController extends Controller
                 'description' => 'Certenize verified skill: ' . $c->skill,
                 'recipientAddress' => $c->wallet_address,
                 'recipientName' => null,
-                'issueDate' => optional($c->minted_at)->toIso8601String(),
+                'issueDate' => $issueDate,
                 'topic' => $c->skill,
                 'score' => $c->score,
                 'imageUrl' => env('CERT_IMAGE_BASE', url('/placeholder.svg')),
                 'metadataUri' => null,
                 'transactionHash' => $c->transaction_hash,
-                'minted' => (bool) $c->minted_at,
+                'minted' => (bool) ($c->minted_at || $c->transaction_hash),
+                'questions' => $sess ? ($sess->quiz_json ?? []) : [],
+                'answers' => $sess ? ($sess->answers ?? []) : [],
+                'aiScores' => $sess ? ($sess->ai_scores ?? []) : [],
+                'proctoring' => [
+                    'tabSwitches' => $sess ? ($sess->tab_switches ?? 0) : 0,
+                    'copyPasteEvents' => $sess ? ($sess->copy_paste_events ?? 0) : 0,
+                    'suspicious' => $sess ? (bool) $sess->suspicious_flag : false,
+                    'appealStatus' => $sess ? $sess->appeal_status : null,
+                    'videoUrl' => $sess ? $sess->video_appeal_url : null,
+                ],
             ];
         });
 

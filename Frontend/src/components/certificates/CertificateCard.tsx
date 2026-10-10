@@ -10,8 +10,13 @@ interface CertificateCardProps {
 }
 
 export function CertificateCard({ certificate, onClick }: CertificateCardProps) {
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Recent';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime()) || d.getFullYear() <= 1970) {
+      return 'Recent';
+    }
+    return d.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -35,11 +40,8 @@ export function CertificateCard({ certificate, onClick }: CertificateCardProps) 
           <div className="absolute inset-0 pattern-grid opacity-30" />
           
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 border border-border flex items-center justify-center mb-4">
-              <Award className="w-8 h-8 text-primary" />
-            </div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Certificate of Completion
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 border border-border flex items-center justify-center mb-3">
+              <Award className="w-7 h-7 text-primary" />
             </div>
             <h3 className="text-lg font-bold font-display text-gradient line-clamp-2">
               {certificate.title}
@@ -50,7 +52,7 @@ export function CertificateCard({ certificate, onClick }: CertificateCardProps) 
           {certificate.minted && (
             <div className="absolute top-3 right-3 px-2 py-1 rounded-full bg-success/20 text-success text-xs font-medium flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-success" />
-              Minted
+              Verified On-Chain
             </div>
           )}
         </div>
@@ -86,23 +88,34 @@ export function CertificateCard({ certificate, onClick }: CertificateCardProps) 
             )}
           </div>
 
-          {certificate.transactionHash && (
+          <div className="mt-4 pt-3 border-t border-border/60 flex flex-col gap-2">
             <Button
-              variant="ghost"
+              variant="hero"
               size="sm"
-              className="w-full mt-4 text-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(
-                  `https://sepolia.etherscan.io/tx/${certificate.transactionHash}`,
-                  '_blank'
-                );
-              }}
+              className="w-full text-xs"
+              onClick={onClick}
             >
-              View on Etherscan
-              <ExternalLink className="w-3 h-3 ml-2" />
+              Inspect Questions & Proof
             </Button>
-          )}
+
+            {certificate.transactionHash && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(
+                    `https://sepolia.etherscan.io/tx/${certificate.transactionHash}`,
+                    '_blank'
+                  );
+                }}
+              >
+                View on Etherscan
+                <ExternalLink className="w-3 h-3 ml-2" />
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </motion.div>

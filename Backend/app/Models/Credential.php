@@ -20,6 +20,10 @@ class Credential extends Model
         'transaction_hash', 'skill', 'score', 'minted_at'
     ];
 
+    protected $casts = [
+        'minted_at' => 'datetime',
+    ];
+
     protected static function boot(): void
     {
         parent::boot();

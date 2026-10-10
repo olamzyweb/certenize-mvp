@@ -188,7 +188,10 @@ class CredentialController extends Controller
 
     public function walletCredentials($wallet)
     {
-        $creds = Credential::where('wallet_address', $wallet)->get();
+        $wallet = trim($wallet);
+        $creds = Credential::whereRaw('LOWER(wallet_address) = ?', [strtolower($wallet)])
+            ->orderBy('id', 'desc')
+            ->get();
 
         $data = $creds->map(function ($c) {
             return [

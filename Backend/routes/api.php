@@ -11,5 +11,7 @@ Route::get('/user', function (Request $request) {
 
 Route::post('/generate-quiz', [QuizController::class, 'generate']);
 Route::post('/submit-quiz', [QuizController::class, 'submit']);
+Route::post('/appeal-session', [QuizController::class, 'appeal']);
+Route::post('/quiz/appeal', [QuizController::class, 'appeal']);
 Route::post('/mint-credential', [CredentialController::class, 'mint']);
 Route::get('/credentials/{wallet}', [CredentialController::class, 'walletCredentials']);

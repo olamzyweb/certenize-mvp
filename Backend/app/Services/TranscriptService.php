@@ -8,14 +8,67 @@ use Illuminate\Support\Facades\Log;
 class TranscriptService
 {
     /**
-     * Extract the video ID from a YouTube URL.
+     * Extract the video ID from a YouTube URL (handles desktop, mobile, shorts, live, and embed).
      */
     public function extractVideoId(string $url): ?string
     {
-        $pattern = '/^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/';
+        $url = trim($url);
+        $pattern = '/(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i';
         if (preg_match($pattern, $url, $matches)) {
             return $matches[1];
         }
+        return null;
+    }
+
+    /**
+     * Helper to extract a complete, balanced JSON object substring from text starting at an offset.
+     */
+    private function extractJsonObject(string $str, int $startOffset): ?string
+    {
+        $firstBrace = strpos($str, '{', $startOffset);
+        if ($firstBrace === false) {
+            return null;
+        }
+
+        $length = strlen($str);
+        $depth = 0;
+        $inString = false;
+        $escape = false;
+
+        for ($i = $firstBrace; $i < $length; $i++) {
+            $char = $str[$i];
+
+            if ($escape) {
+                $escape = false;
+                continue;
+            }
+
+            if ($char === '\\') {
+                $escape = true;
+                continue;
+            }
+
+            if ($char === '"' || $char === "'") {
+                if ($inString === $char) {
+                    $inString = false;
+                } elseif ($inString === false) {
+                    $inString = $char;
+                }
+                continue;
+            }
+
+            if (!$inString) {
+                if ($char === '{') {
+                    $depth++;
+                } elseif ($char === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        return substr($str, $firstBrace, $i - $firstBrace + 1);
+                    }
+                }
+            }
+        }
+
         return null;
     }
 
@@ -30,11 +83,11 @@ class TranscriptService
         }
 
         try {
-            // Fetch video page HTML
-            // Using a realistic User-Agent is helpful to get the correct desktop response
+            // Fetch video page HTML with desktop browser headers
             $response = Http::withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept-Language' => 'en-US,en;q=0.9',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             ])->get("https://www.youtube.com/watch?v={$videoId}");
 
             if (!$response->successful()) {
@@ -43,39 +96,31 @@ class TranscriptService
 
             $html = $response->body();
 
-            // Find ytInitialPlayerResponse
-            $jsonStartPattern = 'ytInitialPlayerResponse = ';
-            $startPos = strpos($html, $jsonStartPattern);
-            if ($startPos === false) {
-                // Try alternative pattern
-                $jsonStartPattern = 'var ytInitialPlayerResponse = ';
-                $startPos = strpos($html, $jsonStartPattern);
+            // Locate ytInitialPlayerResponse marker
+            $patterns = [
+                'ytInitialPlayerResponse = ',
+                'var ytInitialPlayerResponse = ',
+                'window["ytInitialPlayerResponse"] = ',
+                'ytInitialPlayerResponse='
+            ];
+
+            $startPos = false;
+            foreach ($patterns as $pattern) {
+                $pos = strpos($html, $pattern);
+                if ($pos !== false) {
+                    $startPos = $pos + strlen($pattern);
+                    break;
+                }
             }
 
             if ($startPos === false) {
-                // Try window["ytInitialPlayerResponse"] pattern
-                $jsonStartPattern = 'window["ytInitialPlayerResponse"] = ';
-                $startPos = strpos($html, $jsonStartPattern);
+                throw new \Exception("Could not extract player response. Video may be private, age-restricted, or blocked.");
             }
 
-            if ($startPos === false) {
-                throw new \Exception("Could not extract player response. Auto-generated captions may not be accessible.");
+            $jsonStr = $this->extractJsonObject($html, $startPos);
+            if (!$jsonStr) {
+                throw new \Exception("Malformed player response JSON script.");
             }
-
-            $startPos += strlen($jsonStartPattern);
-            // Locate ending semicolon of the json block
-            $endPos = strpos($html, '};', $startPos);
-            if ($endPos === false) {
-                $endPos = strpos($html, '</script>', $startPos);
-            }
-
-            if ($endPos === false) {
-                throw new \Exception("Malformed player response script.");
-            }
-
-            $jsonStr = substr($html, $startPos, $endPos - $startPos + 1);
-            // Trim any ending whitespace or semicolon
-            $jsonStr = rtrim(trim($jsonStr), ';');
 
             $data = json_decode($jsonStr, true);
             if (!$data) {
@@ -113,7 +158,7 @@ class TranscriptService
 
             $cleaned = $this->clean($xmlResponse->body());
             if (empty($cleaned)) {
-                throw new \Exception("Scraped transcript is empty (blocked by YouTube's bot detection).");
+                throw new \Exception("Scraped transcript is empty.");
             }
             return $cleaned;
 
@@ -127,38 +172,48 @@ class TranscriptService
     }
 
     /**
-     * Clean raw XML transcript into human-readable text.
+     * Clean raw XML or plain-text transcript into sanitized human-readable text.
      */
-    public function clean(string $rawXml): string
+    public function clean(string $rawInput): string
     {
-        // Simple XML parser to get <text> tags
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($rawXml);
-        if (!$xml) {
-            // Fallback regex if XML loading fails
-            preg_match_all('/<text[^>]*>(.*?)<\/text>/is', $rawXml, $matches);
-            $texts = $matches[1] ?? [];
-        } else {
-            $texts = [];
-            foreach ($xml->text as $textNode) {
-                $texts[] = (string)$textNode;
-            }
-        }
-
-        if (empty($texts)) {
+        $rawInput = trim($rawInput);
+        if (empty($rawInput)) {
             return '';
         }
 
-        // Decode entities and strip basic HTML tag occurrences
-        $cleanedTexts = array_map(function($t) {
-            $decoded = html_entity_decode($t, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            return strip_tags($decoded);
-        }, $texts);
+        // 1. Check if input is XML formatted (from YouTube timedtext endpoint)
+        if (str_contains($rawInput, '<text') || str_contains($rawInput, '<transcript')) {
+            libxml_use_internal_errors(true);
+            $xml = simplexml_load_string($rawInput);
+            $texts = [];
+            if ($xml && isset($xml->text)) {
+                foreach ($xml->text as $textNode) {
+                    $texts[] = (string)$textNode;
+                }
+            } else {
+                preg_match_all('/<text[^>]*>(.*?)<\/text>/is', $rawInput, $matches);
+                $texts = $matches[1] ?? [];
+            }
 
-        // Join texts with spaces and clean duplicate whitespaces
-        $fullText = implode(' ', $cleanedTexts);
-        $fullText = preg_replace('/\s+/', ' ', $fullText);
+            if (!empty($texts)) {
+                $cleanedTexts = array_map(function($t) {
+                    $decoded = html_entity_decode($t, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    return strip_tags($decoded);
+                }, $texts);
+                $fullText = implode(' ', $cleanedTexts);
+                $fullText = preg_replace('/\s+/', ' ', $fullText);
+                return trim($fullText);
+            }
+        }
 
-        return trim($fullText);
+        // 2. Plain text input (manually pasted from YouTube "Show transcript" or notes)
+        // Strip timestamps like 00:15, 1:23:45, [00:00], etc.
+        $cleaned = preg_replace('/\[?\b\d{1,2}:\d{2}(?::\d{2})?\b\]?/', ' ', $rawInput);
+        $cleaned = html_entity_decode($cleaned, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $cleaned = strip_tags($cleaned);
+        $cleaned = preg_replace('/\s+/', ' ', $cleaned);
+
+        return trim($cleaned);
     }
 }
+

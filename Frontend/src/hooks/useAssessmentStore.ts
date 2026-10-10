@@ -23,6 +23,7 @@ interface AssessmentState {
   setTimeRemaining: (time: number) => void;
   setSubmitting: (isSubmitting: boolean) => void;
   setResult: (result: AssessmentResult) => void;
+  updateResult: (updates: Partial<AssessmentResult>) => void;
   incrementTabSwitches: () => void;
   incrementCopyPaste: () => void;
   incrementWindowBlur: () => void;
@@ -83,6 +84,10 @@ export const useAssessmentStore = create<AssessmentState>((set, get) => ({
   setTimeRemaining: (time) => set({ timeRemaining: time }),
   setSubmitting: (isSubmitting) => set({ isSubmitting }),
   setResult: (result) => set({ lastResult: result }),
+  updateResult: (updates) =>
+    set((s) => ({
+      lastResult: s.lastResult ? { ...s.lastResult, ...updates } : null,
+    })),
   incrementTabSwitches: () => set((s) => ({ tabSwitches: s.tabSwitches + 1 })),
   incrementCopyPaste: () => set((s) => ({ copyPasteEvents: s.copyPasteEvents + 1 })),
   incrementWindowBlur: () => set((s) => ({ windowBlurEvents: s.windowBlurEvents + 1 })),

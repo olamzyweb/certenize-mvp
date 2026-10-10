@@ -1,26 +1,29 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, XCircle, Award, RotateCcw, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
+import { Trophy, XCircle, Award, RotateCcw, ArrowRight, CheckCircle, AlertCircle, Video, ShieldCheck, Sparkles } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAssessmentStore } from '@/hooks/useAssessmentStore';
 import { useConfetti } from '@/hooks/useConfetti';
 import { Helmet } from 'react-helmet-async';
+import { VideoAppealModal } from '@/components/quiz/VideoAppealModal';
 
 const Result = () => {
   const VITE_APP_NAME = import.meta.env.VITE_APP_NAME || 'Certenize';
   const navigate = useNavigate();
-  const { lastResult, currentAssessment, resetAssessment } = useAssessmentStore();
+  const { lastResult, currentAssessment, resetAssessment, updateResult } = useAssessmentStore();
   const { fireConfetti, fireStars } = useConfetti();
+  const [isAppealModalOpen, setIsAppealModalOpen] = useState(false);
+  const [appealVerified, setAppealVerified] = useState(false);
 
   useEffect(() => {
     if (!lastResult) {
       navigate('/quiz');
       return;
     }
-    if (lastResult.passed) {
+    if (lastResult.passed && !lastResult.suspicious) {
       setTimeout(() => fireConfetti(), 500);
       setTimeout(() => fireStars(), 1500);
     }
@@ -31,6 +34,16 @@ const Result = () => {
   const handleTryAgain = () => {
     resetAssessment();
     navigate('/quiz');
+  };
+
+  const handleAppealVerified = (mintToken: string, feedback: string) => {
+    updateResult({
+      suspicious: false,
+      mintToken: mintToken,
+    });
+    setAppealVerified(true);
+    fireConfetti();
+    setTimeout(() => fireStars(), 1000);
   };
 
   return (
@@ -84,10 +97,48 @@ const Result = () => {
 
                 {/* Suspicious flag warning */}
                 {lastResult.suspicious && (
-                  <div className="mt-4 flex items-center justify-center gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2">
-                    <AlertCircle className="w-4 h-4" />
-                    This session was flagged for review due to proctoring signals.
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-left"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                        <Video className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                          Proctoring Review: Video Proof Required
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                          This session was flagged due to tab switches or copy-paste signals. Record a quick 60-second video explanation of your answers to verify your domain mastery and unlock your Soulbound Token.
+                        </p>
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant="hero"
+                            onClick={() => setIsAppealModalOpen(true)}
+                            className="bg-amber-600 hover:bg-amber-500 text-white font-medium"
+                          >
+                            <Video className="w-4 h-4 mr-1.5" />
+                            Record 60s Video Proof
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Appeal Verified Banner */}
+                {appealVerified && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="mt-4 flex items-center justify-center gap-2 text-sm text-success bg-success/10 border border-success/30 rounded-xl px-4 py-2.5 font-medium"
+                  >
+                    <Sparkles className="w-4 h-4 text-success" />
+                    Video proof verified by Gemini AI! Minting unlocked.
+                  </motion.div>
                 )}
               </motion.div>
 
@@ -202,24 +253,43 @@ const Result = () => {
                 className="flex flex-col sm:flex-row gap-4 justify-center"
               >
                 {lastResult.passed ? (
-                  <>
-                    <Link to="/mint">
-                      <Button variant="hero" size="xl" className="w-full sm:w-auto">
-                        <Award className="w-5 h-5" />
-                        Mint Certificate
-                        <ArrowRight className="w-5 h-5" />
+                  lastResult.suspicious ? (
+                    <>
+                      <Button
+                        variant="hero"
+                        size="xl"
+                        onClick={() => setIsAppealModalOpen(true)}
+                        className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white"
+                      >
+                        <Video className="w-5 h-5 mr-2" />
+                        Record Video Proof to Mint
                       </Button>
-                    </Link>
-                    <Link to="/gallery">
-                      <Button variant="hero-outline" size="xl" className="w-full sm:w-auto">
-                        View Gallery
-                      </Button>
-                    </Link>
-                  </>
+                      <Link to="/gallery">
+                        <Button variant="hero-outline" size="xl" className="w-full sm:w-auto">
+                          View Gallery
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link to="/mint">
+                        <Button variant="hero" size="xl" className="w-full sm:w-auto">
+                          <Award className="w-5 h-5 mr-2" />
+                          Mint Certificate
+                          <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                      </Link>
+                      <Link to="/gallery">
+                        <Button variant="hero-outline" size="xl" className="w-full sm:w-auto">
+                          View Gallery
+                        </Button>
+                      </Link>
+                    </>
+                  )
                 ) : (
                   <>
                     <Button variant="hero" size="xl" onClick={handleTryAgain}>
-                      <RotateCcw className="w-5 h-5" />
+                      <RotateCcw className="w-5 h-5 mr-2" />
                       Try Again
                     </Button>
                     <Link to="/">
@@ -233,6 +303,15 @@ const Result = () => {
             </motion.div>
           </div>
         </main>
+
+        {/* ─── Video Appeal Modal ────────────────────────────────────────── */}
+        <VideoAppealModal
+          isOpen={isAppealModalOpen}
+          onClose={() => setIsAppealModalOpen(false)}
+          quizId={lastResult.quizId}
+          topic={currentAssessment.topic}
+          onVerified={handleAppealVerified}
+        />
       </div>
     </>
   );

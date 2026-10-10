@@ -15,6 +15,10 @@ class TranscriptServiceTest extends TestCase
         $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ'));
         $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('https://youtu.be/dQw4w9WgXcQ'));
         $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ'));
+        $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ'));
+        $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ'));
+        $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('https://www.youtube.com/live/dQw4w9WgXcQ'));
+        $this->assertEquals('dQw4w9WgXcQ', $service->extractVideoId('  https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120s  '));
         $this->assertNull($service->extractVideoId('https://google.com'));
     }
 
@@ -27,11 +31,20 @@ class TranscriptServiceTest extends TestCase
         $this->assertEquals('hello world & friends', $cleaned);
     }
 
-    public function test_fetching_and_parsing_flow()
+    public function test_cleaning_plain_text_transcript_with_timestamps()
+    {
+        $service = new TranscriptService();
+        $plain = "00:00 Welcome to Laravel tutorial. 01:15 Today we build an API &amp; controllers.";
+
+        $cleaned = $service->clean($plain);
+        $this->assertEquals('Welcome to Laravel tutorial. Today we build an API & controllers.', $cleaned);
+    }
+
+    public function test_fetching_and_parsing_flow_with_nested_json()
     {
         Http::fake([
             'https://www.youtube.com/watch?v=dQw4w9WgXcQ' => Http::response(
-                '<html><body><script>var ytInitialPlayerResponse = {"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://youtube.com/api/timedtext/mock","languageCode":"en"}]}}};</script></body></html>',
+                '<html><body><script>var ytInitialPlayerResponse = {"trackingParams":{"nested":"data"};"nested2":{"val":123},"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://youtube.com/api/timedtext/mock","languageCode":"en"}]}}}; var somethingElse = 1;</script></body></html>',
                 200
             ),
             'https://youtube.com/api/timedtext/mock' => Http::response(
@@ -46,3 +59,4 @@ class TranscriptServiceTest extends TestCase
         $this->assertEquals('Never gonna give you up', $transcript);
     }
 }
+

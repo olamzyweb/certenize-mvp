@@ -27,6 +27,9 @@ class QuizSession extends Model
         'copy_paste_events',
         'window_blur_events',
         'suspicious_flag',
+        'video_appeal_url',
+        'appeal_status',
+        'appeal_feedback',
         'mint_token'
     ];
 

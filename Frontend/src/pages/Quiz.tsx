@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, ArrowRight, Send, RefreshCw, Youtube,
@@ -40,6 +40,7 @@ const TYPE_BADGE: Record<string, { label: string; color: string; icon: React.Ele
 const QuizPage = () => {
   const VITE_APP_NAME = import.meta.env.VITE_APP_NAME || 'Certenize';
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { address } = useAccount();
 
   // UI state
@@ -47,6 +48,17 @@ const QuizPage = () => {
   const [selectedTopic, setSelectedTopic] = useState('');
   const [customTopic, setCustomTopic] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
+
+  useEffect(() => {
+    const search = searchParams.get('search') || searchParams.get('topic');
+    if (search) {
+      if (search.includes('youtube.com') || search.includes('youtu.be')) {
+        setYoutubeUrl(search);
+      } else {
+        setCustomTopic(search);
+      }
+    }
+  }, [searchParams]);
   const [showTranscriptFallback, setShowTranscriptFallback] = useState(false);
   const [manualTranscript, setManualTranscript] = useState('');
   const [startTime, setStartTime] = useState<number>(0);
@@ -108,9 +120,13 @@ const QuizPage = () => {
 
   // ─── Start assessment ───────────────────────────────────────────────────────
   const handleStartAssessment = async () => {
-    const topic = selectedTopic || customTopic;
+    const topic = selectedTopic || customTopic || (youtubeUrl ? 'YouTube Course' : '');
     if (!topic) {
-      toast({ title: 'Select a topic', description: 'Please choose or enter a skill topic', variant: 'destructive' });
+      toast({
+        title: 'Select a topic or video',
+        description: 'Please choose a skill category, enter a custom topic, or paste a YouTube course URL.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -130,8 +146,8 @@ const QuizPage = () => {
         // YouTube transcript fetch failed — offer manual paste
         setShowTranscriptFallback(true);
         toast({
-          title: "Couldn't fetch video transcript",
-          description: 'Please paste the video transcript manually to continue.',
+          title: "Couldn't auto-fetch video captions",
+          description: 'Please paste the video transcript or key notes below to proceed with your assessment.',
           variant: 'destructive',
         });
       } else {
@@ -322,7 +338,7 @@ const QuizPage = () => {
                         variant="hero"
                         size="xl"
                         onClick={handleStartAssessment}
-                        disabled={loading || (!selectedTopic && !customTopic)}
+                        disabled={loading || (!selectedTopic && !customTopic && !youtubeUrl && !manualTranscript)}
                       >
                         {loading ? (
                           <><RefreshCw className="w-5 h-5 animate-spin" /> Generating Assessment…</>

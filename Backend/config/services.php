@@ -44,7 +44,7 @@ return [
         ],
         'gemini' => [
             'key' => env('GEMINI_API_KEY'),
-            'model' => env('GEMINI_MODEL', 'gemini-1.5-pro'),
+            'model' => env('GEMINI_MODEL', env('LLM_MODEL', 'gemini-2.5-flash')),
         ],
         'openai' => [
             'key' => env('OPENAI_API_KEY'),

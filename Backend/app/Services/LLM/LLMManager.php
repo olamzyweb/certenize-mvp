@@ -29,7 +29,7 @@ class LLMManager extends Manager
     {
         return new GeminiDriver(
             $this->container['config']->get('services.llm.gemini.key'),
-            $this->container['config']->get('services.llm.gemini.model', 'gemini-1.5-pro')
+            $this->container['config']->get('services.llm.gemini.model', 'gemini-2.5-flash')
         );
     }
 
